@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Music Player</title>
+<link rel="stylesheet" href="music.css" />
+</head>
+
+<body>
+
+<!--  SIDEBAR -->
+<div class="sidebar">
+    <h2>My Collection</h2>
+    <button id="addBtn" onclick="openAddSongModal()" class="add-btn">+ ADD</button>
+    <div id="songList"></div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+    <div class="player-top">
+
+    <img class="cover" id="coverImage" alt="There is no song selected"/>
+
+    <div class="song-info">
+        <div class="title" id="songTitle">Select a song</div>
+        <div class="artist" id="artistName">Artist name</div>
+    </div>
+
+</div>
+  
+    <div class="controls">
+        <button onclick="prevSong()"><</button>
+        <button onclick="togglePlay()">| |</button>
+        <button onclick="nextSong()">></button>
+
+        <div class="progress-container">
+            <input type="range" id="progress" value="0" step="1">
+            
+        </div>
+        <span id="time">0:00</span>
+        <div class="volume">
+            <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQUTR3AnfBgfNIX6gQlM_zBJfb5U9hSyO0Hwg&s" alt="Volume" width="20">
+            <input type="range" id="volumeSlider" min="0" max="100" step="1" onchange="audio.volume=this.value/100">
+        </div>
+
+        
+    </div>
+
+    <div class="lyrics" id="lyricsBox">
+        Lyrics will appear here…
+    </div>
+
+</div>
+
+<audio id="audio"></audio>
+
+<!-- Add Song Modal -->
+<div id="addSongModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeAddSongModal()">&times;</span>
+        <h2>Add New Song</h2>
+        <form id="addSongForm">
+            <input type="text" id="newSongTitle" placeholder="Song Title" required>
+            <input type="text" id="newSongArtist" placeholder="Artist Name" required>
+            <input type="text" id="newSongFile" placeholder="Song File URL" required>
+            <input type="text" id="newSongCover" placeholder="Cover Image URL" required>
+            <textarea id="newSongLyrics" placeholder="Lyrics" rows="4"></textarea>
+            <button type="submit">Add Song</button>
+        </form>
+    </div>
+</div>
+
+<script src="music.js"></script>
+
+
+
+</body> 
+</html>
