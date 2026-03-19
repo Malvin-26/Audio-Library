@@ -99,7 +99,7 @@ audio.currentTime=progress.value;
 /* Delete Song Function */
 function deleteSong(songId){
 if(confirm("Are you sure you want to delete this song?")){
-fetch("/api/songs/"+songId,{
+fetch("/api/songs?id="+songId,{
 method:"DELETE"
 })
 .then(r=>{
