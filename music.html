@@ -31,9 +31,9 @@
 </div>
   
     <div class="controls">
-        <button onclick="prevSong()"><</button>
+        <button onclick="prevSong()">&lt;</button>
         <button onclick="togglePlay()">| |</button>
-        <button onclick="nextSong()">></button>
+        <button onclick="nextSong()">&gt;</button>
 
         <div class="progress-container">
             <input type="range" id="progress" value="0" step="1">
@@ -42,14 +42,14 @@
         <span id="time">0:00</span>
         <div class="volume">
             <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQUTR3AnfBgfNIX6gQlM_zBJfb5U9hSyO0Hwg&s" alt="Volume" width="20">
-            <input type="range" id="volumeSlider" min="0" max="100" step="1" onchange="audio.volume=this.value/100">
+            <input type="range" id="volumeSlider" min="0" max="100" step="1">
         </div>
 
         
     </div>
 
     <div class="lyrics" id="lyricsBox">
-        Lyrics will appear here…
+                Lyrics will appear here...
     </div>
 
 </div>
