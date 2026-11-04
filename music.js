@@ -361,6 +361,15 @@ document
     }
   });
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 /* Helper to upload file directly to Supabase Storage */
 async function uploadToSupabaseStorage(bucket, file) {
   if (!supabaseClient) {
@@ -369,18 +378,39 @@ async function uploadToSupabaseStorage(bucket, file) {
     );
   }
 
-  const cleanName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const filePath = `${Date.now()}_${cleanName}`;
+  // Generate a strictly safe alphanumeric filename without special characters or double dots
+  const ext = (file.name.split(".").pop() || (bucket === "songs" ? "mp3" : "jpg"))
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  const randomStr = Math.random().toString(36).substring(2, 8);
+  const filePath = `${bucket}_${Date.now()}_${randomStr}.${ext}`;
+
+  // Attempt to auto-create bucket if permitted
+  try {
+    await supabaseClient.storage.createBucket(bucket, { public: true });
+  } catch (e) {}
 
   const { data, error } = await supabaseClient.storage
     .from(bucket)
     .upload(filePath, file, {
       cacheControl: "3600",
       upsert: true,
+      contentType: file.type || (bucket === "songs" ? "audio/mpeg" : "image/jpeg"),
     });
 
   if (error) {
-    throw new Error(`Storage upload failed (${bucket}): ${error.message}. Make sure the '${bucket}' bucket exists and is public in Supabase.`);
+    console.error(`Storage upload error (${bucket}):`, error);
+    const msg = error.message || "";
+    if (
+      msg.toLowerCase().includes("not found") ||
+      msg.toLowerCase().includes("invalid path") ||
+      error.statusCode === "404"
+    ) {
+      throw new Error(
+        `Bucket '${bucket}' was not found in Supabase.\n\nTo fix:\n1. Open your Supabase Dashboard ➔ Storage\n2. Click 'New Bucket'\n3. Name it '${bucket}' and check 'Public bucket' ✅`
+      );
+    }
+    throw new Error(`Storage upload failed (${bucket}): ${msg}`);
   }
 
   const { data: urlData } = supabaseClient.storage
@@ -437,12 +467,18 @@ document
         }
       }
 
-      /* 2. Resolve Cover URL */
+      /* 2. Resolve Cover URL (with automatic Base64 fallback so artwork always succeeds) */
       if (currentCoverMode === "upload") {
         if (!coverFileInput.files || !coverFileInput.files[0]) {
           throw new Error("Please select a cover image (JPG/PNG)");
         }
-        finalCoverUrl = await uploadToSupabaseStorage("covers", coverFileInput.files[0]);
+        const coverFile = coverFileInput.files[0];
+        try {
+          finalCoverUrl = await uploadToSupabaseStorage("covers", coverFile);
+        } catch (coverErr) {
+          console.warn("Storage upload for cover failed, using base64 fallback:", coverErr.message);
+          finalCoverUrl = await fileToBase64(coverFile);
+        }
       } else {
         finalCoverUrl = coverUrlInput.value.trim();
         if (!finalCoverUrl) {
