@@ -383,12 +383,7 @@ async function uploadToSupabaseStorage(bucket, file) {
     .toLowerCase()
     .replace(/[^a-z0-9]/g, "");
   const randomStr = Math.random().toString(36).substring(2, 8);
-  const filePath = `${bucket}_${Date.now()}_${randomStr}.${ext}`;
-
-  // Attempt to auto-create bucket if permitted
-  try {
-    await supabaseClient.storage.createBucket(bucket, { public: true });
-  } catch (e) {}
+  const filePath = `${Date.now()}_${randomStr}.${ext}`;
 
   const { data, error } = await supabaseClient.storage
     .from(bucket)
@@ -401,13 +396,9 @@ async function uploadToSupabaseStorage(bucket, file) {
   if (error) {
     console.error(`Storage upload error (${bucket}):`, error);
     const msg = error.message || "";
-    if (
-      msg.toLowerCase().includes("not found") ||
-      msg.toLowerCase().includes("invalid path") ||
-      error.statusCode === "404"
-    ) {
+    if (msg.toLowerCase().includes("row-level security") || msg.toLowerCase().includes("policy")) {
       throw new Error(
-        `Bucket '${bucket}' was not found in Supabase.\n\nTo fix:\n1. Open your Supabase Dashboard ➔ Storage\n2. Click 'New Bucket'\n3. Name it '${bucket}' and check 'Public bucket' ✅`
+        `Storage upload blocked by Supabase Policy!\n\nTo allow uploads:\n1. Go to Supabase Dashboard ➔ Storage ➔ Policies\n2. Next to the '${bucket}' bucket, click 'New Policy'\n3. Add an INSERT policy allowing public uploads (or run supabase-setup.sql in SQL Editor).`
       );
     }
     throw new Error(`Storage upload failed (${bucket}): ${msg}`);
