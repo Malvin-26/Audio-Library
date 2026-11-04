@@ -10,13 +10,10 @@ height:100vh;
 /* ===== SIDEBAR SONG LIST ===== */
 .sidebar{
     width:290px;
-   
     background:#000;
 overflow-y:auto;
 border-right:1px solid #222;
 }
-
-
 
 .cover{
 width: 220px;
@@ -26,6 +23,7 @@ border: 1px solid #fff;
 margin-left: 20px;
 margin-top: 10px;
 border-radius:10px;
+object-fit:cover;
 }   
 
 .sidebar h2{
@@ -38,18 +36,18 @@ border-radius:10px;
 }
 
 .song{
-    padding:25px 20px;
+    padding:20px 20px;
     cursor:pointer;
     border-bottom:1px solid #222;
     display:flex;
     align-items:center;
     justify-content:space-between;
+    transition: background 0.2s;
 }
 
 .song:hover{
     background:#1a1a1a;
 }
-
 
 .delete-btn{
 background:#030000;
@@ -90,15 +88,16 @@ opacity:1;
 }
 
 .song-info .title{
-    font-size:50px;
+    font-size:42px;
     font-weight:bold;
     color:#fdfefd;
 }
 
 .song-info .artist{
-    font-size:25px;
+    font-size:22px;
     opacity:0.8;
 }
+
 h2{
     text-align: center;
     color:#1db954;
@@ -117,24 +116,22 @@ background:#f7faf8;
 border:rgb(3, 0, 0) solid;
     color:#000;
     margin-left: 10px;
-padding:14px 26px;
+padding:12px 22px;
 border-radius:15px;
 cursor:pointer;
-font-size: 20px;
+font-size: 18px;
     font-weight:bold;
     transition: 0.3s;
 }
-
 
 .controls button:hover{
 color:white;
 background:#000000;
 border: 1px solid white;
-
 }
 
 /* Progress */
-  .progress-container {
+.progress-container {
     flex:1;
 } 
 
@@ -143,17 +140,21 @@ border: 1px solid white;
 }
 
 #time{
-    margin-right:50px;
+    margin-right:20px;
     font-size:12px;
     color:#fdfcfc;
-    min-width:50px;
+    min-width:70px;
+}
+
+.volume{
+    display:flex;
+    align-items:center;
+    gap:8px;
 }
 
 .volume input[type=range]{
-    flex: 1;
-    width: 100px;
+    width: 90px;
 }
-
 
 /* Lyrics */
 .lyrics{
@@ -162,12 +163,13 @@ padding:20px;
     overflow-y:auto;
 line-height:1.6;
 background:#181818;
+white-space: pre-wrap;
 }
 
 .add-btn{
 width:90%;
 margin:15px 5%;
-padding:18px 18px;
+padding:16px 18px;
 background:#fcfcfc;
 color:#000;
 border:none;
@@ -184,33 +186,39 @@ background:#000000;
 border: 1px solid white;
 }
 
+/* ===== MODAL ===== */
 .modal{
 display:none;
 position:fixed;
-z-index:1;
+z-index:999;
 left:0;
 top:0;
 width:100%;
 height:100%;
-background-color:rgba(0,0,0,0.8);
+background-color:rgba(0,0,0,0.85);
+backdrop-filter: blur(4px);
 }
 
 .modal-content{
-background-color:#282828;
-margin:5% auto;
-padding:30px;
-border:1px solid #f4f7f5;
-width:500px;
-border-radius:10px;
+background-color:#202020;
+margin:3% auto;
+padding:25px 30px;
+border:1px solid #333;
+width:480px;
+border-radius:12px;
 color:#fff;
-max-height:80vh;
+max-height:85vh;
 overflow-y:auto;
+box-shadow: 0 10px 30px rgba(0,0,0,0.7);
 }
 
 .modal-content h2{
 margin-top:0;
 color:#f5f7f6;
-padding:20px;
+padding:10px 0 20px 0;
+text-align:left;
+font-size:22px;
+border-bottom: 1px solid #333;
 }
 
 .close{
@@ -219,6 +227,7 @@ float:right;
 font-size:28px;
 font-weight:bold;
 cursor:pointer;
+line-height: 20px;
 }
 
 .close:hover{
@@ -228,63 +237,93 @@ color:#fff;
 .modal-content form{
 display:flex;
 flex-direction:column;
-gap:15px;
+gap:14px;
+margin-top:15px;
 }
 
 .modal-content input[type="text"],
+.modal-content input[type="url"],
 .modal-content textarea{
-padding:10px;
+width: 100%;
+box-sizing: border-box;
+padding:10px 12px;
 border:1px solid #404040;
 background:#121212;
 color:#fff;
-border-radius:5px;
+border-radius:6px;
 font-family:Arial, sans-serif;
+font-size:14px;
 }
 
 .modal-content input[type="text"]:focus,
+.modal-content input[type="url"]:focus,
 .modal-content textarea:focus{
 outline:none;
-border-color:#ffffff;
-box-shadow:0 0 5px #1e2d23;
+border-color:#1db954;
+box-shadow:0 0 5px rgba(29, 185, 84, 0.4);
 }
 
-.modal-content button{
-background:#fafcfb;
-color:#000;
-padding:10px;
-border:none;
-border-radius:5px;
+.form-section{
+display:flex;
+flex-direction:column;
+gap:8px;
+background:#181818;
+padding:12px;
+border-radius:8px;
+border:1px solid #2a2a2a;
+}
+
+.section-label{
+font-size:13px;
 font-weight:bold;
+color:#bbb;
+}
+
+.tab-group{
+display:flex;
+gap:8px;
+margin-bottom:4px;
+}
+
+.tab-btn{
+flex:1;
+background:#282828;
+color:#aaa;
+border:1px solid #3a3a3a;
+padding:8px 10px;
+border-radius:6px;
+font-size:13px;
+margin-left:0;
 cursor:pointer;
-transition:all 0.3s;
+transition:all 0.2s;
 }
 
-.modal-content button:hover{
-    color: #fff;
-background:#000903;
-border:1px solid #fff;
+.tab-btn:hover{
+background:#333;
+color:#fff;
 }
 
-.modal-content button:disabled{
-opacity:0.5;
-cursor:not-allowed;
+.tab-btn.active{
+background:#1db954;
+color:#000;
+border-color:#1db954;
+font-weight:bold;
 }
 
-/* File upload styles */
 .file-upload-label{
 display:flex;
 align-items:center;
-padding:12px 15px;
-border:2px dashed #404040;
-border-radius:8px;
+padding:12px 14px;
+border:2px dashed #444;
+border-radius:6px;
 cursor:pointer;
-transition:all 0.3s;
-background:#1a1a1a;
+transition:all 0.2s;
+background:#141414;
 }
 
 .file-upload-label:hover{
-border-color:#fff;
-background:#222;
+border-color:#1db954;
+background:#1c1c1c;
 }
 
 .file-upload-label input[type="file"]{
@@ -292,22 +331,50 @@ display:none;
 }
 
 .file-upload-label span{
-font-size:14px;
-color:#ccc;
+font-size:13px;
+color:#ddd;
 overflow:hidden;
 text-overflow:ellipsis;
 white-space:nowrap;
 }
 
-/* Cover image preview */
 .cover-preview{
 text-align:center;
+margin-top:8px;
+min-height:0;
 }
 
 .cover-preview img{
-max-width:200px;
-max-height:200px;
-border-radius:8px;
-border:1px solid #404040;
+max-width:140px;
+max-height:140px;
+border-radius:6px;
+border:1px solid #444;
 object-fit:cover;
+}
+
+.modal-content button[type="submit"]{
+background:#1db954;
+color:#000;
+padding:12px;
+border:none;
+border-radius:6px;
+font-weight:bold;
+font-size:15px;
+cursor:pointer;
+transition:all 0.2s;
+margin-left:0;
+margin-top:5px;
+}
+
+.modal-content button[type="submit"]:hover{
+background:#1ed760;
+color:#000;
+box-shadow: 0 4px 12px rgba(29, 185, 84, 0.3);
+}
+
+.modal-content button[type="submit"]:disabled{
+opacity:0.5;
+cursor:not-allowed;
+background:#444;
+color:#888;
 }
