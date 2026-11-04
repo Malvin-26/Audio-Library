@@ -96,7 +96,7 @@ async function saveSupabaseSettings(e) {
     supabaseClient = window.supabase.createClient(url, key);
     if (supabaseBanner) supabaseBanner.style.display = "none";
     closeSupabaseModal();
-    alert("✅ Supabase credentials saved! Fetching your songs...");
+    alert("✅ Supabase credentials saved! Loading your songs...");
     await fetchSongs();
   } catch (err) {
     alert("Error connecting with these credentials: " + err.message);
@@ -113,22 +113,9 @@ function clearSupabaseSettings() {
   fetchSongs();
 }
 
-/* Fetch songs from backend or directly from Supabase */
+/* Fetch songs from Supabase directly or via backend */
 async function fetchSongs() {
-  try {
-    const r = await fetch("/api/songs");
-    if (r.ok) {
-      songs = await r.json();
-      if (Array.isArray(songs) && songs.length > 0) {
-        renderSongs();
-        return;
-      }
-    }
-  } catch (err) {
-    console.warn("Server API fetch error:", err.message);
-  }
-
-  // Client-side fallback if Supabase client is initialized
+  // 1. Direct Supabase client fetch (fastest and most reliable)
   if (supabaseClient) {
     try {
       const { data, error } = await supabaseClient
@@ -136,14 +123,29 @@ async function fetchSongs() {
         .select("*")
         .order("id", { ascending: true });
 
-      if (!error && data) {
+      if (!error && Array.isArray(data)) {
         songs = data;
         renderSongs();
         return;
       }
     } catch (e) {
-      console.warn("Direct Supabase select error:", e.message);
+      console.warn("Direct Supabase select failed:", e.message);
     }
+  }
+
+  // 2. Fallback to /api/songs
+  try {
+    const r = await fetch("/api/songs");
+    if (r.ok) {
+      const data = await r.json();
+      if (Array.isArray(data)) {
+        songs = data;
+        renderSongs();
+        return;
+      }
+    }
+  } catch (err) {
+    console.warn("Server API fetch error:", err.message);
   }
 
   renderSongs();
@@ -249,29 +251,35 @@ progress.addEventListener("input", () => {
 async function deleteSong(songId) {
   if (!confirm("Are you sure you want to delete this song?")) return;
 
-  try {
-    const res = await fetch(`/api/songs?id=${encodeURIComponent(songId)}`, {
-      method: "DELETE",
-    });
+  let deleted = false;
 
-    if (res.ok) {
-      await fetchSongs();
-      return;
-    }
-  } catch (e) {}
-
-  // Fallback direct delete via Supabase client
+  // 1. Direct Supabase delete
   if (supabaseClient) {
     try {
       const { error } = await supabaseClient.from("songs").delete().eq("id", songId);
-      if (!error) {
-        await fetchSongs();
-        return;
-      }
+      if (!error) deleted = true;
     } catch (e) {}
   }
 
-  alert("Failed to delete song. Check your Supabase permissions.");
+  // 2. Server API fallback
+  if (!deleted) {
+    try {
+      const res = await fetch(`/api/songs?id=${encodeURIComponent(songId)}`, {
+        method: "DELETE",
+      });
+      if (res.ok) deleted = true;
+    } catch (e) {}
+  }
+
+  if (deleted) {
+    await fetchSongs();
+    if (currentIndex >= songs.length) {
+      currentIndex = songs.length - 1;
+      if (currentIndex >= 0) loadSong(currentIndex);
+    }
+  } else {
+    alert("Failed to delete song. Check your Supabase permissions.");
+  }
 }
 
 /* Tab Switchers for Add Song Modal */
@@ -372,7 +380,7 @@ async function uploadToSupabaseStorage(bucket, file) {
     });
 
   if (error) {
-    throw new Error(`Storage upload failed (${bucket}): ${error.message}. Make sure the '${bucket}' bucket exists and has public policies in Supabase.`);
+    throw new Error(`Storage upload failed (${bucket}): ${error.message}. Make sure the '${bucket}' bucket exists and is public in Supabase.`);
   }
 
   const { data: urlData } = supabaseClient.storage
@@ -398,7 +406,7 @@ document
     const coverFileInput = document.getElementById("newSongCover");
     const coverUrlInput = document.getElementById("newSongCoverUrl");
 
-    // Check credentials if not running local express
+    // Check credentials
     if (!supabaseClient) {
       const needConfig = confirm(
         "⚠️ Supabase is not connected yet!\n\nWould you like to open the configuration modal to paste your Supabase URL & Anon Key?"
@@ -451,42 +459,54 @@ document
         lyrics: lyricsVal,
       };
 
-      // Try server API first
       let saved = false;
-      let apiError = null;
-      try {
-        const res = await fetch("/api/songs", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-          },
-          body: JSON.stringify(songPayload),
-        });
+      let lastError = null;
 
-        if (res.ok) {
-          saved = true;
-        } else {
-          const errData = await res.json().catch(() => ({}));
-          apiError = errData.error || `Server error (${res.status})`;
-          console.warn("API save returned error:", apiError);
+      // Primary: Save directly using Supabase client
+      if (supabaseClient) {
+        try {
+          const { data, error } = await supabaseClient
+            .from("songs")
+            .insert([songPayload])
+            .select();
+
+          if (!error) {
+            saved = true;
+            console.log("Song saved directly to Supabase:", data);
+          } else {
+            lastError = error.message;
+            console.warn("Direct Supabase insert error:", error.message);
+          }
+        } catch (err) {
+          lastError = err.message;
         }
-      } catch (e) {
-        apiError = e.message;
-        console.warn("API save fetch failed:", e.message);
       }
 
-      // Fallback: direct Supabase insertion
-      if (!saved && supabaseClient) {
-        const { error } = await supabaseClient.from("songs").insert([songPayload]);
-        if (error) {
-          throw new Error("Supabase insert error: " + error.message);
+      // Secondary: Try server API /api/songs
+      if (!saved) {
+        try {
+          const res = await fetch("/api/songs", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json"
+            },
+            body: JSON.stringify(songPayload),
+          });
+
+          if (res.ok) {
+            saved = true;
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            lastError = errData.error || `Server error (${res.status})`;
+          }
+        } catch (err) {
+          lastError = err.message;
         }
-        saved = true;
       }
 
       if (!saved) {
-        throw new Error(apiError || "Could not save song. Please check your Supabase credentials.");
+        throw new Error(lastError || "Could not save song. Please check your Supabase credentials.");
       }
 
       await fetchSongs();

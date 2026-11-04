@@ -22,9 +22,11 @@ function getSupabaseClient() {
 
 /* Parse JSON body asynchronously (supports pre-parsed objects, strings, Buffers, and raw streams) */
 async function parseBody(req) {
-  // 1. If already parsed by middleware or Vercel
+  // 1. If already parsed by middleware or Vercel and has properties
   if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
-    return req.body;
+    if (Object.keys(req.body).length > 0) {
+      return req.body;
+    }
   }
 
   // 2. If body is a string or Buffer
@@ -33,34 +35,50 @@ async function parseBody(req) {
       const text = Buffer.isBuffer(req.body)
         ? req.body.toString("utf8")
         : String(req.body);
-      return JSON.parse(text);
-    } catch (e) {
-      return null;
-    }
+      if (text.trim().startsWith("{")) {
+        const parsed = JSON.parse(text);
+        if (typeof parsed === "string") {
+          return JSON.parse(parsed);
+        }
+        return parsed;
+      }
+    } catch (e) {}
   }
 
-  // 3. If stream, read incoming chunks
-  return new Promise((resolve) => {
-    let raw = "";
-    req.on("data", (chunk) => {
-      raw += chunk;
+  // 3. If req.rawBody exists
+  if (req.rawBody) {
+    try {
+      const text = Buffer.isBuffer(req.rawBody)
+        ? req.rawBody.toString("utf8")
+        : String(req.rawBody);
+      return JSON.parse(text);
+    } catch (e) {}
+  }
+
+  // 4. If stream, read incoming chunks with safety timeout
+  try {
+    const raw = await new Promise((resolve) => {
+      let data = "";
+      req.on("data", (chunk) => {
+        data += chunk;
+      });
+      req.on("end", () => resolve(data));
+      req.on("error", () => resolve(""));
+      setTimeout(() => resolve(data), 300);
     });
-    req.on("end", () => {
-      if (!raw || !raw.trim()) return resolve(null);
-      try {
-        resolve(JSON.parse(raw));
-      } catch (e) {
-        resolve(null);
-      }
-    });
-    req.on("error", () => resolve(null));
-  });
+
+    if (raw && raw.trim()) {
+      return JSON.parse(raw);
+    }
+  } catch (e) {}
+
+  return req.body || {};
 }
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Accept");
 
   if (req.method === "OPTIONS") {
     return res.status(200).end();
@@ -100,11 +118,15 @@ module.exports = async function handler(req, res) {
 
       const payload = (await parseBody(req)) || {};
 
-      const title = (payload.title || req.query?.title || "").trim();
-      const artist = (payload.artist || req.query?.artist || "").trim();
-      const file = (payload.file || req.query?.file || "").trim();
-      const cover = (payload.cover || req.query?.cover || "").trim();
-      const lyrics = (payload.lyrics != null ? String(payload.lyrics) : (req.query?.lyrics || "")).trim();
+      const title = (payload.title || req.body?.title || req.query?.title || "").trim();
+      const artist = (payload.artist || req.body?.artist || req.query?.artist || "").trim();
+      const file = (payload.file || req.body?.file || req.query?.file || "").trim();
+      const cover = (payload.cover || req.body?.cover || req.query?.cover || "").trim();
+      const lyrics = (
+        payload.lyrics != null
+          ? String(payload.lyrics)
+          : (req.body?.lyrics != null ? String(req.body.lyrics) : (req.query?.lyrics || ""))
+      ).trim();
 
       if (!title || !artist || !file || !cover) {
         return res.status(400).json({
@@ -134,8 +156,8 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const body = (await parseBody(req)) || {};
-      const id = req.query?.id || body?.id;
+      const payload = (await parseBody(req)) || {};
+      const id = req.query?.id || payload?.id || req.body?.id;
 
       if (!id) {
         return res.status(400).json({ error: "Song ID is required" });
