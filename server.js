@@ -165,19 +165,6 @@ app.post(
   }
 );
 
-/* Error handler for multer */
-app.use((err, req, res, next) => {
-  if (err instanceof multer.MulterError) {
-    if (err.code === "LIMIT_FILE_SIZE") {
-      return res.status(400).json({ error: "File too large. Max size is 50MB." });
-    }
-    return res.status(400).json({ error: err.message });
-  } else if (err) {
-    return res.status(400).json({ error: err.message });
-  }
-  next();
-});
-
 /* Delete song from database */
 app.delete("/api/songs/:id", (req, res) => {
   const { id } = req.params;
@@ -216,6 +203,19 @@ app.delete("/api/songs/:id", (req, res) => {
       }
     });
   });
+});
+
+/* Error handler for multer — must be after all routes */
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return res.status(400).json({ error: "File too large. Max size is 50MB." });
+    }
+    return res.status(400).json({ error: err.message });
+  } else if (err) {
+    return res.status(400).json({ error: err.message });
+  }
+  next();
 });
 
 app.listen(PORT, () => {

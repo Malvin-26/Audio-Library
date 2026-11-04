@@ -2,3 +2,4 @@ node_modules/
 uploads/
 music.db
 *.db-journal
+
