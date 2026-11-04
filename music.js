@@ -7,6 +7,7 @@ const lyricsBox = document.getElementById("lyricsBox");
 const progress = document.getElementById("progress");
 const timeDisplay = document.getElementById("time");
 const volumeSlider = document.getElementById("volumeSlider");
+const supabaseBanner = document.getElementById("supabaseBanner");
 
 let songs = [];
 let currentIndex = -1;
@@ -23,45 +24,138 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
-/* Initialize Supabase client if config is available */
+/* Initialize Supabase: Checks server /api/config, then falls back to localStorage */
 async function initSupabase() {
+  let url = localStorage.getItem("audio_supabase_url") || "";
+  let key = localStorage.getItem("audio_supabase_key") || "";
+
   try {
     const res = await fetch("/api/config");
-    if (!res.ok) return;
-    const config = await res.json();
-
-    if (config.supabaseUrl && config.supabaseAnonKey && window.supabase) {
-      supabaseClient = window.supabase.createClient(
-        config.supabaseUrl,
-        config.supabaseAnonKey
-      );
-      console.log("Supabase client initialized successfully");
+    if (res.ok) {
+      const config = await res.json();
+      if (config.hasAnonKey && config.supabaseAnonKey) {
+        url = config.supabaseUrl;
+        key = config.supabaseAnonKey;
+      } else if (!url && config.supabaseUrl) {
+        url = config.supabaseUrl;
+      }
     }
   } catch (err) {
     console.warn("Could not load /api/config:", err.message);
   }
+
+  // Pre-fill modal fields
+  const urlInput = document.getElementById("settingsSupabaseUrl");
+  const keyInput = document.getElementById("settingsSupabaseKey");
+  if (urlInput && url) urlInput.value = url;
+  if (keyInput && key) keyInput.value = key;
+
+  if (url && key && window.supabase) {
+    try {
+      supabaseClient = window.supabase.createClient(url, key);
+      console.log("Supabase client initialized successfully");
+      if (supabaseBanner) supabaseBanner.style.display = "none";
+      return true;
+    } catch (e) {
+      console.error("Error creating Supabase client:", e);
+    }
+  }
+
+  // If credentials are still missing, show banner
+  if (supabaseBanner) {
+    supabaseBanner.style.display = "flex";
+  }
+  return false;
 }
 
-/* Fetch songs from backend */
+/* Supabase Modal Controls */
+function openSupabaseModal() {
+  const modal = document.getElementById("supabaseSettingsModal");
+  if (modal) modal.style.display = "block";
+}
+
+function closeSupabaseModal() {
+  const modal = document.getElementById("supabaseSettingsModal");
+  if (modal) modal.style.display = "none";
+}
+
+async function saveSupabaseSettings(e) {
+  e.preventDefault();
+  const url = document.getElementById("settingsSupabaseUrl").value.trim();
+  const key = document.getElementById("settingsSupabaseKey").value.trim();
+
+  if (!url || !key) {
+    alert("Please enter both Supabase URL and Anon Key.");
+    return;
+  }
+
+  localStorage.setItem("audio_supabase_url", url);
+  localStorage.setItem("audio_supabase_key", key);
+
+  try {
+    supabaseClient = window.supabase.createClient(url, key);
+    if (supabaseBanner) supabaseBanner.style.display = "none";
+    closeSupabaseModal();
+    alert("✅ Supabase credentials saved! Fetching your songs...");
+    await fetchSongs();
+  } catch (err) {
+    alert("Error connecting with these credentials: " + err.message);
+  }
+}
+
+function clearSupabaseSettings() {
+  localStorage.removeItem("audio_supabase_url");
+  localStorage.removeItem("audio_supabase_key");
+  document.getElementById("settingsSupabaseKey").value = "";
+  supabaseClient = null;
+  if (supabaseBanner) supabaseBanner.style.display = "flex";
+  closeSupabaseModal();
+  fetchSongs();
+}
+
+/* Fetch songs from backend or directly from Supabase */
 async function fetchSongs() {
   try {
     const r = await fetch("/api/songs");
-    if (!r.ok) {
-      const errData = await r.json().catch(() => ({}));
-      throw new Error(errData.error || `Failed to fetch songs (${r.status})`);
+    if (r.ok) {
+      songs = await r.json();
+      if (Array.isArray(songs) && songs.length > 0) {
+        renderSongs();
+        return;
+      }
     }
-    songs = await r.json();
-    renderSongs();
   } catch (err) {
-    console.error("Error fetching songs:", err);
-    songList.innerHTML = `<div style="padding:20px;color:#888;font-size:13px;">No songs found or error loading collection. ${err.message}</div>`;
+    console.warn("Server API fetch error:", err.message);
   }
+
+  // Client-side fallback if Supabase client is initialized
+  if (supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from("songs")
+        .select("*")
+        .order("id", { ascending: true });
+
+      if (!error && data) {
+        songs = data;
+        renderSongs();
+        return;
+      }
+    } catch (e) {
+      console.warn("Direct Supabase select error:", e.message);
+    }
+  }
+
+  renderSongs();
 }
 
 function renderSongs() {
   songList.innerHTML = "";
   if (!songs || songs.length === 0) {
-    songList.innerHTML = `<div style="padding:20px;color:#777;font-size:13px;text-align:center;">No songs yet. Click <b>+ ADD</b> to add your first track!</div>`;
+    songList.innerHTML = `
+      <div style="padding:25px 15px;color:#888;font-size:13px;text-align:center;line-height:1.6;">
+        No songs found yet.<br>Click <b>+ ADD</b> to add your first track!
+      </div>`;
     return;
   }
 
@@ -160,20 +254,24 @@ async function deleteSong(songId) {
       method: "DELETE",
     });
 
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || "Failed to delete song");
+    if (res.ok) {
+      await fetchSongs();
+      return;
     }
+  } catch (e) {}
 
-    await fetchSongs();
-    if (currentIndex >= songs.length) {
-      currentIndex = songs.length - 1;
-      if (currentIndex >= 0) loadSong(currentIndex);
-    }
-  } catch (err) {
-    console.error("Delete error:", err);
-    alert("Failed to delete song: " + err.message);
+  // Fallback direct delete via Supabase client
+  if (supabaseClient) {
+    try {
+      const { error } = await supabaseClient.from("songs").delete().eq("id", songId);
+      if (!error) {
+        await fetchSongs();
+        return;
+      }
+    } catch (e) {}
   }
+
+  alert("Failed to delete song. Check your Supabase permissions.");
 }
 
 /* Tab Switchers for Add Song Modal */
@@ -218,7 +316,7 @@ function setCoverSourceMode(mode) {
 }
 
 /* File input change handlers */
-document.getElementById("newSongFile").addEventListener("change", function () {
+document.getElementById("newSongFile")?.addEventListener("change", function () {
   const label = document.getElementById("songFileLabel");
   if (this.files && this.files[0]) {
     label.innerText = "🎵 " + this.files[0].name;
@@ -227,7 +325,7 @@ document.getElementById("newSongFile").addEventListener("change", function () {
   }
 });
 
-document.getElementById("newSongCover").addEventListener("change", function () {
+document.getElementById("newSongCover")?.addEventListener("change", function () {
   const label = document.getElementById("coverFileLabel");
   const preview = document.getElementById("coverPreview");
   if (this.files && this.files[0]) {
@@ -259,7 +357,7 @@ document
 async function uploadToSupabaseStorage(bucket, file) {
   if (!supabaseClient) {
     throw new Error(
-      "Supabase client is not initialized. Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are set."
+      "Supabase is not connected. Click ⚙️ Config in the sidebar to add your Supabase credentials, or add them in Vercel settings."
     );
   }
 
@@ -274,7 +372,7 @@ async function uploadToSupabaseStorage(bucket, file) {
     });
 
   if (error) {
-    throw new Error(`Storage upload error (${bucket}): ${error.message}`);
+    throw new Error(`Storage upload failed (${bucket}): ${error.message}. Make sure the '${bucket}' bucket exists and has public policies in Supabase.`);
   }
 
   const { data: urlData } = supabaseClient.storage
@@ -287,7 +385,7 @@ async function uploadToSupabaseStorage(bucket, file) {
 /* Handle Add Song Form Submission */
 document
   .getElementById("addSongForm")
-  .addEventListener("submit", async (e) => {
+  ?.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     const titleVal = document.getElementById("newSongTitle").value.trim();
@@ -299,6 +397,17 @@ document
     const songUrlInput = document.getElementById("newSongFileUrl");
     const coverFileInput = document.getElementById("newSongCover");
     const coverUrlInput = document.getElementById("newSongCoverUrl");
+
+    // Check credentials if not running local express
+    if (!supabaseClient) {
+      const needConfig = confirm(
+        "⚠️ Supabase is not connected yet!\n\nWould you like to open the configuration modal to paste your Supabase URL & Anon Key?"
+      );
+      if (needConfig) {
+        openSupabaseModal();
+      }
+      return;
+    }
 
     submitBtn.disabled = true;
     submitBtn.innerText = "Uploading & Saving...";
@@ -312,35 +421,7 @@ document
         if (!songFileInput.files || !songFileInput.files[0]) {
           throw new Error("Please select an MP3 file to upload");
         }
-        const file = songFileInput.files[0];
-
-        if (supabaseClient) {
-          finalAudioUrl = await uploadToSupabaseStorage("songs", file);
-        } else {
-          /* Fallback: If running with local Express + Multer */
-          const fd = new FormData();
-          fd.append("songFile", file);
-          if (currentCoverMode === "upload" && coverFileInput.files[0]) {
-            fd.append("coverFile", coverFileInput.files[0]);
-          } else if (coverUrlInput.value) {
-            fd.append("cover", coverUrlInput.value.trim());
-          }
-          fd.append("title", titleVal);
-          fd.append("artist", artistVal);
-          fd.append("lyrics", lyricsVal);
-
-          const localRes = await fetch("/api/songs", {
-            method: "POST",
-            body: fd,
-          });
-          if (!localRes.ok) {
-            const errJson = await localRes.json().catch(() => ({}));
-            throw new Error(errJson.error || "Local upload failed");
-          }
-          await fetchSongs();
-          closeAddSongModal();
-          return;
-        }
+        finalAudioUrl = await uploadToSupabaseStorage("songs", songFileInput.files[0]);
       } else {
         finalAudioUrl = songUrlInput.value.trim();
         if (!finalAudioUrl) {
@@ -353,8 +434,7 @@ document
         if (!coverFileInput.files || !coverFileInput.files[0]) {
           throw new Error("Please select a cover image (JPG/PNG)");
         }
-        const file = coverFileInput.files[0];
-        finalCoverUrl = await uploadToSupabaseStorage("covers", file);
+        finalCoverUrl = await uploadToSupabaseStorage("covers", coverFileInput.files[0]);
       } else {
         finalCoverUrl = coverUrlInput.value.trim();
         if (!finalCoverUrl) {
@@ -362,28 +442,40 @@ document
         }
       }
 
-      /* 3. Send Song Metadata to /api/songs */
-      const res = await fetch("/api/songs", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          title: titleVal,
-          artist: artistVal,
-          file: finalAudioUrl,
-          cover: finalCoverUrl,
-          lyrics: lyricsVal,
-        }),
-      });
+      /* 3. Save Song Metadata */
+      const songPayload = {
+        title: titleVal,
+        artist: artistVal,
+        file: finalAudioUrl,
+        cover: finalCoverUrl,
+        lyrics: lyricsVal,
+      };
 
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || "Failed to add song");
+      // Try server API first
+      let saved = false;
+      try {
+        const res = await fetch("/api/songs", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(songPayload),
+        });
+        if (res.ok) saved = true;
+      } catch (e) {}
+
+      // Fallback: direct Supabase insertion
+      if (!saved && supabaseClient) {
+        const { error } = await supabaseClient.from("songs").insert([songPayload]);
+        if (error) throw new Error("Supabase insert error: " + error.message);
+        saved = true;
+      }
+
+      if (!saved) {
+        throw new Error("Could not save song. Please check your Supabase credentials.");
       }
 
       await fetchSongs();
       closeAddSongModal();
+      alert("🎉 Song added successfully!");
     } catch (err) {
       console.error("Add song error:", err);
       alert("Error: " + err.message);
@@ -409,19 +501,27 @@ function closeAddSongModal() {
 
   setAudioSourceMode("upload");
   setCoverSourceMode("upload");
-  document.getElementById("songFileLabel").innerText = "🎵 Choose MP3 File";
-  document.getElementById("coverFileLabel").innerText =
-    "🖼️ Choose Image (JPG/PNG)";
-  document.getElementById("coverPreview").innerHTML = "";
+  const songLabel = document.getElementById("songFileLabel");
+  const coverLabel = document.getElementById("coverFileLabel");
+  const preview = document.getElementById("coverPreview");
+
+  if (songLabel) songLabel.innerText = "🎵 Choose MP3 File";
+  if (coverLabel) coverLabel.innerText = "🖼️ Choose Image (JPG/PNG)";
+  if (preview) preview.innerHTML = "";
 }
 
 window.addEventListener("click", (event) => {
-  const modal = document.getElementById("addSongModal");
-  if (event.target === modal) closeAddSongModal();
+  const addModal = document.getElementById("addSongModal");
+  const settingsModal = document.getElementById("supabaseSettingsModal");
+  if (event.target === addModal) closeAddSongModal();
+  if (event.target === settingsModal) closeSupabaseModal();
 });
 
 window.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") closeAddSongModal();
+  if (event.key === "Escape") {
+    closeAddSongModal();
+    closeSupabaseModal();
+  }
 });
 
 /* Startup */

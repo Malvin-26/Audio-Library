@@ -10,15 +10,24 @@
 
 <body>
 
-<!--  SIDEBAR -->
+<!-- SIDEBAR -->
 <div class="sidebar">
     <h2>My Collection</h2>
-    <button id="addBtn" onclick="openAddSongModal()" class="add-btn">+ ADD</button>
+    <div class="sidebar-buttons">
+        <button id="addBtn" onclick="openAddSongModal()" class="add-btn">+ ADD</button>
+        <button id="settingsBtn" onclick="openSupabaseModal()" class="settings-btn" title="Supabase Settings">⚙️ Config</button>
+    </div>
     <div id="songList"></div>
 </div>
 
 <!-- MAIN -->
 <div class="main">
+
+    <!-- Notification Banner (shown only if Supabase credentials are missing) -->
+    <div id="supabaseBanner" class="alert-banner" style="display:none;">
+        <span>⚠️ Supabase is not connected. Add your credentials in Vercel or click here to configure:</span>
+        <button onclick="openSupabaseModal()" class="banner-btn">⚙️ Connect Supabase</button>
+    </div>
 
     <div class="player-top">
 
@@ -110,6 +119,34 @@
 
             <textarea id="newSongLyrics" placeholder="Lyrics (optional)" rows="4"></textarea>
             <button type="submit" id="submitSongBtn">Add Song</button>
+        </form>
+    </div>
+</div>
+
+<!-- Supabase Credentials Modal -->
+<div id="supabaseSettingsModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeSupabaseModal()">&times;</span>
+        <h2>⚙️ Supabase Configuration</h2>
+        <p style="font-size:13px;color:#aaa;line-height:1.5;">
+            Connect your Supabase project so your songs, MP3 uploads, and album art persist online.
+        </p>
+        <form id="supabaseSettingsForm" onsubmit="saveSupabaseSettings(event)">
+            <div>
+                <label style="font-size:12px;color:#bbb;display:block;margin-bottom:5px;">Supabase Project URL:</label>
+                <input type="url" id="settingsSupabaseUrl" placeholder="https://your-project-id.supabase.co" required>
+            </div>
+            <div>
+                <label style="font-size:12px;color:#bbb;display:block;margin-bottom:5px;">Supabase Anon Key:</label>
+                <input type="password" id="settingsSupabaseKey" placeholder="eyJhbGciOi..." required>
+            </div>
+            <p style="font-size:12px;color:#888;">
+                💡 Find these in: <b>Supabase Dashboard ➔ Project Settings ➔ API</b>.
+            </p>
+            <div style="display:flex;gap:10px;">
+                <button type="submit" style="flex:1;">Save Credentials</button>
+                <button type="button" onclick="clearSupabaseSettings()" style="background:#444;color:#fff;">Clear</button>
+            </div>
         </form>
     </div>
 </div>
