@@ -54,3 +54,4 @@ A modern web-based music player designed to run seamlessly on **Vercel** with **
    npm start
    ```
 4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+

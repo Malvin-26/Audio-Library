@@ -1,4 +1,3 @@
-require("dotenv").config();
 const { createClient } = require("@supabase/supabase-js");
 
 const DEFAULT_SUPABASE_URL = "https://pnysywzorgsomfvpuvic.supabase.co";
@@ -13,7 +12,12 @@ function getSupabaseClient() {
     return null;
   }
 
-  return createClient(supabaseUrl, supabaseKey);
+  try {
+    return createClient(supabaseUrl, supabaseKey);
+  } catch (err) {
+    console.error("Supabase client init error:", err.message);
+    return null;
+  }
 }
 
 function parseBody(req) {
@@ -40,22 +44,21 @@ module.exports = async function handler(req, res) {
   try {
     const supabase = getSupabaseClient();
 
-    if (!supabase) {
-      return res.status(500).json({
-        error:
-          "Missing Supabase credentials. Please set SUPABASE_URL and SUPABASE_ANON_KEY in your Vercel or .env settings.",
-      });
-    }
-
-    /* GET: Fetch songs */
+    /* GET: Fetch songs list */
     if (req.method === "GET") {
+      if (!supabase) {
+        console.warn("Supabase credentials not configured in environment variables.");
+        return res.status(200).json([]);
+      }
+
       const { data, error } = await supabase
         .from("songs")
         .select("*")
         .order("id", { ascending: true });
 
       if (error) {
-        throw error;
+        console.warn("Supabase query error:", error.message);
+        return res.status(200).json([]);
       }
 
       return res.status(200).json(data || []);
@@ -63,9 +66,16 @@ module.exports = async function handler(req, res) {
 
     /* POST: Add new song */
     if (req.method === "POST") {
+      if (!supabase) {
+        return res.status(400).json({
+          error:
+            "Supabase credentials not configured. Please add SUPABASE_URL and SUPABASE_ANON_KEY to your Vercel project settings.",
+        });
+      }
+
       const payload = parseBody(req);
       if (!payload || typeof payload !== "object") {
-        return res.status(400).json({ error: "Invalid JSON body" });
+        return res.status(400).json({ error: "Invalid JSON request body" });
       }
 
       const title = (payload.title || "").trim();
@@ -86,24 +96,30 @@ module.exports = async function handler(req, res) {
         .select();
 
       if (error) {
-        throw error;
+        return res.status(400).json({ error: error.message });
       }
 
-      return res.status(201).json(data && data[0] ? data[0] : { message: "Song added" });
+      return res
+        .status(201)
+        .json(data && data[0] ? data[0] : { message: "Song added successfully" });
     }
 
-    /* DELETE: Remove song by ID */
+    /* DELETE: Remove song */
     if (req.method === "DELETE") {
-      const id = req.query?.id || req.body?.id;
+      if (!supabase) {
+        return res.status(400).json({
+          error: "Supabase credentials not configured.",
+        });
+      }
 
+      const id = req.query?.id || (parseBody(req) || {})?.id;
       if (!id) {
         return res.status(400).json({ error: "Song ID is required" });
       }
 
       const { error } = await supabase.from("songs").delete().eq("id", id);
-
       if (error) {
-        throw error;
+        return res.status(400).json({ error: error.message });
       }
 
       return res.status(200).json({ message: "Song deleted successfully" });
@@ -112,9 +128,7 @@ module.exports = async function handler(req, res) {
     res.setHeader("Allow", "GET, POST, DELETE");
     return res.status(405).json({ error: "Method not allowed" });
   } catch (err) {
-    console.error("Supabase API Error:", err);
-    return res
-      .status(500)
-      .json({ error: err.message || "Internal server error" });
+    console.error("Handler error:", err);
+    return res.status(500).json({ error: err.message || "Internal server error" });
   }
 };

@@ -67,3 +67,4 @@ Went face to face with all our fears
 Learned our lessons through the tears
 Made memories we knew would never fade'
 WHERE NOT EXISTS (SELECT 1 FROM public.songs LIMIT 1);
+

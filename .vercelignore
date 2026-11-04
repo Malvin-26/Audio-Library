@@ -1,0 +1,5 @@
+server.js
+music.db
+music.db-journal
+uploads
+.env
