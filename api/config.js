@@ -1,3 +1,17 @@
+function sanitizeSupabaseUrl(rawUrl) {
+  if (!rawUrl) return "";
+  let url = rawUrl.trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "https://" + url;
+  }
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (e) {
+    return url.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+  }
+}
+
 module.exports = function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -7,9 +21,10 @@ module.exports = function handler(req, res) {
     return res.status(200).end();
   }
 
-  const supabaseUrl =
+  const rawUrl =
     process.env.SUPABASE_URL || "https://pnysywzorgsomfvpuvic.supabase.co";
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || "";
+  const supabaseUrl = sanitizeSupabaseUrl(rawUrl);
+  const supabaseAnonKey = (process.env.SUPABASE_ANON_KEY || "").trim();
 
   return res.status(200).json({
     supabaseUrl,

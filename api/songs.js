@@ -2,11 +2,27 @@ const { createClient } = require("@supabase/supabase-js");
 
 const DEFAULT_SUPABASE_URL = "https://pnysywzorgsomfvpuvic.supabase.co";
 
+function sanitizeSupabaseUrl(rawUrl) {
+  if (!rawUrl) return "";
+  let url = rawUrl.trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "https://" + url;
+  }
+  try {
+    const parsed = new URL(url);
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (e) {
+    return url.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+  }
+}
+
 function getSupabaseClient() {
-  const supabaseUrl = process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
-  const supabaseKey =
+  const supabaseUrl = sanitizeSupabaseUrl(process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL);
+  const supabaseKey = (
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY;
+    process.env.SUPABASE_ANON_KEY ||
+    ""
+  ).trim();
 
   if (!supabaseUrl || !supabaseKey) {
     return null;

@@ -24,10 +24,26 @@ function formatTime(seconds) {
   return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
 }
 
+/* Sanitize Supabase Project URL to prevent PGRST125 path routing errors */
+function sanitizeSupabaseUrl(rawUrl) {
+  if (!rawUrl) return "";
+  let url = rawUrl.trim();
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    url = "https://" + url;
+  }
+  try {
+    const parsed = new URL(url);
+    // Keep ONLY origin (e.g. https://xyz.supabase.co), stripping /rest/v1 and trailing slashes
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (e) {
+    return url.replace(/\/rest\/v1\/?$/, "").replace(/\/+$/, "");
+  }
+}
+
 /* Initialize Supabase: Checks server /api/config, then falls back to localStorage */
 async function initSupabase() {
   let url = localStorage.getItem("audio_supabase_url") || "";
-  let key = localStorage.getItem("audio_supabase_key") || "";
+  let key = (localStorage.getItem("audio_supabase_key") || "").trim();
 
   try {
     const res = await fetch("/api/config");
@@ -44,6 +60,8 @@ async function initSupabase() {
     console.warn("Could not load /api/config:", err.message);
   }
 
+  url = sanitizeSupabaseUrl(url);
+
   // Pre-fill modal fields
   const urlInput = document.getElementById("settingsSupabaseUrl");
   const keyInput = document.getElementById("settingsSupabaseKey");
@@ -53,7 +71,7 @@ async function initSupabase() {
   if (url && key && window.supabase) {
     try {
       supabaseClient = window.supabase.createClient(url, key);
-      console.log("Supabase client initialized successfully");
+      console.log("Supabase client initialized at", url);
       if (supabaseBanner) supabaseBanner.style.display = "none";
       return true;
     } catch (e) {
@@ -81,13 +99,15 @@ function closeSupabaseModal() {
 
 async function saveSupabaseSettings(e) {
   e.preventDefault();
-  const url = document.getElementById("settingsSupabaseUrl").value.trim();
+  let url = document.getElementById("settingsSupabaseUrl").value.trim();
   const key = document.getElementById("settingsSupabaseKey").value.trim();
 
   if (!url || !key) {
     alert("Please enter both Supabase URL and Anon Key.");
     return;
   }
+
+  url = sanitizeSupabaseUrl(url);
 
   localStorage.setItem("audio_supabase_url", url);
   localStorage.setItem("audio_supabase_key", key);
