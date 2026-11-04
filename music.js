@@ -453,24 +453,40 @@ document
 
       // Try server API first
       let saved = false;
+      let apiError = null;
       try {
         const res = await fetch("/api/songs", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+          },
           body: JSON.stringify(songPayload),
         });
-        if (res.ok) saved = true;
-      } catch (e) {}
+
+        if (res.ok) {
+          saved = true;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          apiError = errData.error || `Server error (${res.status})`;
+          console.warn("API save returned error:", apiError);
+        }
+      } catch (e) {
+        apiError = e.message;
+        console.warn("API save fetch failed:", e.message);
+      }
 
       // Fallback: direct Supabase insertion
       if (!saved && supabaseClient) {
         const { error } = await supabaseClient.from("songs").insert([songPayload]);
-        if (error) throw new Error("Supabase insert error: " + error.message);
+        if (error) {
+          throw new Error("Supabase insert error: " + error.message);
+        }
         saved = true;
       }
 
       if (!saved) {
-        throw new Error("Could not save song. Please check your Supabase credentials.");
+        throw new Error(apiError || "Could not save song. Please check your Supabase credentials.");
       }
 
       await fetchSongs();

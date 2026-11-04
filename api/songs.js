@@ -20,16 +20,41 @@ function getSupabaseClient() {
   }
 }
 
-function parseBody(req) {
-  if (req.body == null) return null;
-  if (typeof req.body === "string") {
+/* Parse JSON body asynchronously (supports pre-parsed objects, strings, Buffers, and raw streams) */
+async function parseBody(req) {
+  // 1. If already parsed by middleware or Vercel
+  if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+
+  // 2. If body is a string or Buffer
+  if (req.body != null) {
     try {
-      return JSON.parse(req.body);
-    } catch {
+      const text = Buffer.isBuffer(req.body)
+        ? req.body.toString("utf8")
+        : String(req.body);
+      return JSON.parse(text);
+    } catch (e) {
       return null;
     }
   }
-  return req.body;
+
+  // 3. If stream, read incoming chunks
+  return new Promise((resolve) => {
+    let raw = "";
+    req.on("data", (chunk) => {
+      raw += chunk;
+    });
+    req.on("end", () => {
+      if (!raw || !raw.trim()) return resolve(null);
+      try {
+        resolve(JSON.parse(raw));
+      } catch (e) {
+        resolve(null);
+      }
+    });
+    req.on("error", () => resolve(null));
+  });
 }
 
 module.exports = async function handler(req, res) {
@@ -73,21 +98,18 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const payload = parseBody(req);
-      if (!payload || typeof payload !== "object") {
-        return res.status(400).json({ error: "Invalid JSON request body" });
-      }
+      const payload = (await parseBody(req)) || {};
 
-      const title = (payload.title || "").trim();
-      const artist = (payload.artist || "").trim();
-      const file = (payload.file || "").trim();
-      const cover = (payload.cover || "").trim();
-      const lyrics = payload.lyrics != null ? String(payload.lyrics).trim() : "";
+      const title = (payload.title || req.query?.title || "").trim();
+      const artist = (payload.artist || req.query?.artist || "").trim();
+      const file = (payload.file || req.query?.file || "").trim();
+      const cover = (payload.cover || req.query?.cover || "").trim();
+      const lyrics = (payload.lyrics != null ? String(payload.lyrics) : (req.query?.lyrics || "")).trim();
 
       if (!title || !artist || !file || !cover) {
-        return res
-          .status(400)
-          .json({ error: "title, artist, file, and cover are required" });
+        return res.status(400).json({
+          error: "title, artist, file, and cover are required",
+        });
       }
 
       const { data, error } = await supabase
@@ -112,7 +134,9 @@ module.exports = async function handler(req, res) {
         });
       }
 
-      const id = req.query?.id || (parseBody(req) || {})?.id;
+      const body = (await parseBody(req)) || {};
+      const id = req.query?.id || body?.id;
+
       if (!id) {
         return res.status(400).json({ error: "Song ID is required" });
       }
