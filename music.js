@@ -553,7 +553,11 @@ document
       }
 
       if (!saved) {
-        throw new Error(lastError || "Could not save song. Please check your Supabase credentials.");
+        let msg = lastError || "Could not save song. Please check your Supabase credentials.";
+        if (msg.toLowerCase().includes("row-level security policy") || msg.toLowerCase().includes("violates")) {
+          msg = "Supabase RLS is blocking inserts on table 'songs'!\n\nTo fix:\nRun this in Supabase SQL Editor:\nALTER TABLE public.songs DISABLE ROW LEVEL SECURITY;";
+        }
+        throw new Error(msg);
       }
 
       await fetchSongs();
